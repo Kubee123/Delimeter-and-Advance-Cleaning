@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block content %}
+<form method="POST" action="{{ url_for('delimiter.delimiter_tool') }}" id="main-form">
+    <div class="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-6 items-start">
+        <div class="flex flex-col h-full">
+            <h2 class="text-xl font-bold text-center text-gray-600 mb-4">Data Input</h2>
+            <textarea name="query_input" id="input-textarea" class="w-full h-96 p-4 border-2 border-gray-200 rounded-xl shadow-inner focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all" placeholder="Masukkan data Anda di sini...">{{ original_query }}</textarea>
+        </div>
+        <div class="flex flex-col items-center justify-start h-full pt-16 gap-4">
+            <select name="delimiter_choice" id="delimiter-select" class="w-full p-3 border-2 border-gray-300 rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all">
+                <option value="" {% if not selected_delimiter %}selected{% endif %} disabled>Pilih Delimiter</option>
+                <option value="," {% if selected_delimiter == ',' %}selected{% endif %}>Koma (,)</option>
+                <option value=";" {% if selected_delimiter == ';' %}selected{% endif %}>Titik Koma (;)</option>
+                <option value=" " {% if selected_delimiter == ' ' %}selected{% endif %}>Spasi</option>
+                <option value="|" {% if selected_delimiter == '|' %}selected{% endif %}>Pipe (|)</option>
+                <option value="newline" {% if selected_delimiter == 'newline' %}selected{% endif %}>Newline</option>
+            </select>
+            
+            <select name="symbol_choice" id="symbol-select" class="w-full p-3 border-2 border-gray-300 rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all">
+                <option value="" {% if not selected_symbol %}selected{% endif %} disabled>Pilih Simbol</option>
+                {% for symbol in symbol_list %}
+                <option value="{{ symbol }}" {% if selected_symbol == symbol %}selected{% endif %}>{{ symbol }}</option>
+                {% endfor %}
+            </select>
+
+            <button type="submit" name="action" value="process_delimiter" class="mt-4 w-full p-3 flex items-center justify-center bg-blue-500 text-white rounded-xl shadow-md hover:bg-blue-600 transition-all text-lg" title="Proses">Proses</button>
+            <a href="{{ url_for('delimiter.delimiter_tool') }}" class="w-full p-3 flex items-center justify-center bg-red-500 text-white rounded-xl shadow-md hover:bg-red-600 transition-all text-lg" title="Bersihkan">Reset</a>
+        </div>
+        <div class="flex flex-col h-full">
+            <h2 class="text-xl font-bold text-center text-gray-600 mb-4">Data Output</h2>
+            <textarea id="output-textarea" readonly class="w-full h-96 p-4 border-2 border-gray-200 rounded-xl shadow-inner bg-gray-50">{{ processed_query }}</textarea>
+        </div>
+    </div>
+</form>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const delimiterSelect = document.getElementById('delimiter-select');
+    const symbolSelect = document.getElementById('symbol-select');
+
+    delimiterSelect.addEventListener('change', () => {
+        // Jika delimiter dipilih, reset pilihan simbol
+        if (delimiterSelect.value) {
+            symbolSelect.value = '';
+        }
+    });
+
+    symbolSelect.addEventListener('change', () => {
+        // Jika simbol dipilih, reset pilihan delimiter
+        if (symbolSelect.value) {
+            delimiterSelect.value = '';
+        }
+    });
+});
+</script>
+{% endblock %}

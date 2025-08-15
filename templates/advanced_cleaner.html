@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1 class="text-3xl font-bold text-center text-gray-700 mb-6">Advanced Data Cleaning Tool</h1>
+<!-- Area Upload -->
+<div class="bg-white p-6 rounded-xl shadow-md mb-8">
+    <form method="POST" action="{{ url_for('detector.advanced_cleaner') }}" enctype="multipart/form-data">
+        <input type="hidden" name="action" value="upload">
+        <h2 class="text-xl font-semibold mb-4">1. Upload Your Data File</h2>
+        <div class="flex items-center gap-4">
+            <label for="file-upload" class="flex-1 cursor-pointer bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-2 px-4 border border-gray-300 rounded-lg text-center">
+                Pilih File (CSV, Excel)
+            </label>
+            <input id="file-upload" name="file" type="file" class="hidden" onchange="document.getElementById('file-name').textContent = this.files[0].name">
+            <span id="file-name" class="text-sm text-gray-600">Tidak ada file yang dipilih</span>
+            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg transition-all">Upload</button>
+        </div>
+        {% if upload_error %}
+        <p class="text-red-500 text-sm mt-2">{{ upload_error }}</p>
+        {% endif %}
+    </form>
+</div>
+
+<!-- Area Pemilihan Sheet (muncul jika ada file excel dengan banyak sheet) -->
+{% if sheet_names %}
+<div class="bg-white p-6 rounded-xl shadow-md mb-8">
+    <form method="POST" action="{{ url_for('detector.advanced_cleaner') }}">
+        <input type="hidden" name="action" value="load_sheet">
+        <h2 class="text-xl font-semibold mb-4">Pilih Sheet</h2>
+        <p class="text-sm text-gray-600 mb-4">File Excel Anda memiliki beberapa sheet. Silakan pilih sheet mana yang ingin Anda proses.</p>
+        <div class="flex items-center gap-4">
+            <select name="sheet_name" class="flex-1 border-gray-300 rounded-lg shadow-sm">
+                {% for sheet in sheet_names %}
+                <option value="{{ sheet }}">{{ sheet }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-lg transition-all">Load Sheet</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+
+
+<!-- Konten Utama (muncul setelah data/sheet dimuat) -->
+<div id="main-content" class="{% if not data_uploaded %}hidden{% endif %}">
+    <form method="POST" action="{{ url_for('detector.advanced_cleaner') }}">
+        <!-- Area Definisi Kolom -->
+        <div class="bg-white p-6 rounded-xl shadow-md mb-8">
+            <h2 class="text-xl font-semibold mb-4">2. Define Column Types</h2>
+            <p class="text-sm text-gray-600 mb-4">Tentukan tipe data yang seharusnya untuk setiap kolom agar deteksi lebih akurat.</p>
+            <div id="column-definitions" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                {% for header in headers %}
+                <div class="flex flex-col">
+                    <label for="col-{{ loop.index0 }}" class="font-bold text-sm mb-1 truncate" title="{{ header }}">{{ header }}</label>
+                    <select id="col-{{ loop.index0 }}" name="col_type_{{ loop.index0 }}" class="border-gray-300 rounded-lg shadow-sm">
+                        <option value="any" {% if col_types.get(loop.index0|string) == 'any' %}selected{% endif %}>Any (Tidak dicek)</option>
+                        <option value="numeric" {% if col_types.get(loop.index0|string) == 'numeric' %}selected{% endif %}>Numeric (e.g., NIK)</option>
+                        <option value="alpha" {% if col_types.get(loop.index0|string) == 'alpha' %}selected{% endif %}>Alphabet (e.g., Nama)</option>
+                        <option value="alphanumeric" {% if col_types.get(loop.index0|string) == 'alphanumeric' %}selected{% endif %}>Alphanumeric</option>
+                        <option value="date" {% if col_types.get(loop.index0|string) == 'date' %}selected{% endif %}>Date</option>
+                    </select>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        <!-- Area Aksi -->
+        <div class="bg-white p-6 rounded-xl shadow-md mb-8">
+             <h2 class="text-xl font-semibold mb-4">3. Find Issues</h2>
+             <div class="flex flex-wrap gap-4 items-center">
+                <button type="submit" name="action" value="find_issues" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg">Find All</button>
+             </div>
+        </div>
+        <!-- Tabel Data -->
+        <div class="bg-white p-6 rounded-xl shadow-md">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold">4. Data Preview</h2>
+                <div class="flex items-center gap-4">
+                    <div class="text-sm text-gray-600 font-medium">
+                        <span>{{ rows }} Rows</span> | <span>{{ cols }} Columns</span>
+                    </div>
+                    {% if issues_found %}
+                    <select id="global-filter-select" class="border rounded text-xs p-1">
+                        <option value="all">Filter by Issue</option>
+                        <option value="missing">Missing</option>
+                        <option value="duplicates">Duplicates</option>
+                        <option value="contaminated_alpha">Contaminated (Letter)</option>
+                        <option value="contaminated_numeric">Contaminated (Number)</option>
+                        <option value="symbols">Contaminated (Symbol)</option>
+                    </select>
+                    {% endif %}
+                </div>
+            </div>
+            <div id="log-area" class="mb-4 text-sm text-gray-600">{{ log_message|safe }}</div>
+            <div id="table-container" class="w-full overflow-auto" style="max-height: 500px;">
+                <table id="data-table" class="w-full text-sm">
+                    <thead>
+                        <tr>
+                            <th>No</th>
+                            {% for header in headers %}
+                            <th>
+                                <div class="flex items-center justify-between">
+                                    <span class="truncate" title="{{ header }}">{{ header }}</span>
+                                </div>
+                            </th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row_idx, row in data %}
+                        <tr class="{% if row_idx in issues.duplicates %}table-cell-duplicate{% endif %}">
+                            <td class="font-mono text-gray-500">{{ row_idx + 1 }}</td>
+                            {% for col_idx, cell in row %}
+                            <td class="
+                                {% if '{}-{}'.format(row_idx, col_idx) in issues.missing %}table-cell-missing{% endif %}
+                                {% if '{}-{}'.format(row_idx, col_idx) in issues.symbols %}table-cell-symbol{% endif %}
+                                {% if '{}-{}'.format(row_idx, col_idx) in issues.contaminated_alpha %}table-cell-contaminated-alpha{% endif %}
+                                {% if '{}-{}'.format(row_idx, col_idx) in issues.contaminated_numeric %}table-cell-contaminated-numeric{% endif %}
+                            ">{{ cell }}</td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </form>
+</div>
+
+<style>
+    .table-cell-contaminated-alpha { background-color: #fef9c3; border: 1px solid #fde047; } /* Kuning */
+    .table-cell-contaminated-numeric { background-color: #ffedd5; border: 1px solid #fdba74; } /* Oranye */
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const table = document.getElementById('data-table');
+    if (!table) return;
+
+    const tbody = table.querySelector('tbody');
+    const globalFilter = document.getElementById('global-filter-select');
+
+    if (globalFilter) {
+        globalFilter.addEventListener('change', (event) => {
+            const filterValue = event.currentTarget.value;
+            filterRowsGlobal(filterValue);
+        });
+    }
+
+    function filterRowsGlobal(filterValue) {
+        const rows = tbody.querySelectorAll('tr');
+        if (filterValue === 'all') {
+            rows.forEach(row => row.style.display = '');
+            return;
+        }
+
+        const issueClasses = {
+            'duplicates': 'table-cell-duplicate',
+            'missing': 'table-cell-missing',
+            'symbols': 'table-cell-symbol',
+            'contaminated_alpha': 'table-cell-contaminated-alpha',
+            'contaminated_numeric': 'table-cell-contaminated-numeric'
+        };
+
+        const classToFind = issueClasses[filterValue];
+
+        rows.forEach(row => {
+            let showRow = false;
+            if (filterValue === 'duplicates') {
+                if (row.classList.contains(classToFind)) {
+                    showRow = true;
+                }
+            } else {
+                // Check if any cell in the row has the issue class
+                const cells = row.querySelectorAll('td');
+                for (let i = 0; i < cells.length; i++) {
+                    if (cells[i].classList.contains(classToFind)) {
+                        showRow = true;
+                        break;
+                    }
+                }
+            }
+            row.style.display = showRow ? '' : 'none';
+        });
+    }
+});
+</script>
+{% endblock %}
